@@ -9,6 +9,7 @@ import { Command } from 'commander';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { startAgents } from './actions/server-start';
+import { startWithDocker } from './actions/docker-start';
 import { StartOptions } from './types';
 import { loadEnvConfig } from './utils/config-utils';
 
@@ -18,6 +19,7 @@ export const start = new Command()
   .option('-c, --configure', 'Reconfigure services and AI models')
   .option('-p, --port <port>', 'Port to listen on', validatePort)
   .option('--character <paths...>', 'Character file(s) to use')
+  .option('--docker', 'Run in Docker container')
   .hook('preAction', async () => {
     await displayBanner();
   })
@@ -25,6 +27,12 @@ export const start = new Command()
     try {
       // Load env config first before any character loading
       await loadEnvConfig();
+
+      // Handle Docker mode
+      if (options.docker) {
+        await startWithDocker(options);
+        return;
+      }
 
       // Build the project first (unless it's a monorepo)
       const cwd = process.cwd();

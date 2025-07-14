@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  eliza-dev:
+    build:
+      context: ../../..
+      dockerfile: docker/dockerfiles/Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      # Mount source code for live reload
+      - ../../../packages:/app/packages
+      - ../../../scripts:/app/scripts
+      - ../../../package.json:/app/package.json
+      - ../../../turbo.json:/app/turbo.json
+      - ../../../tsconfig.json:/app/tsconfig.json
+      # Preserve node_modules for performance
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - ELIZA_DEV_MODE=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DISCORD_API_TOKEN=${DISCORD_API_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TWITTER_USERNAME=${TWITTER_USERNAME}
+      - TWITTER_PASSWORD=${TWITTER_PASSWORD}
+      - TWITTER_EMAIL=${TWITTER_EMAIL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - eliza-dev
+
+networks:
+  eliza-dev:
+    driver: bridge 

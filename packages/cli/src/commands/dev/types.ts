@@ -12,6 +12,7 @@ export interface DevOptions {
   configDir?: string;
   character?: string[];
   configure?: boolean;
+  docker?: boolean;  // New flag for Docker mode
 }
 
 /**
