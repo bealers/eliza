@@ -1,43 +1,58 @@
-version: '3.8'
-
 services:
   eliza-dev:
     build:
       context: ../../..
-      dockerfile: docker/dockerfiles/Dockerfile
-      target: development
+      dockerfile: docker/targets/dev/Dockerfile
+    image: elizaos:development
+    container_name: elizaos-dev
     ports:
-      - "3000:3000"
-      - "50000-50100:50000-50100/udp"
-    volumes:
-      # Mount source code for live reload
-      - ../../../packages:/app/packages
-      - ../../../scripts:/app/scripts
-      - ../../../package.json:/app/package.json
-      - ../../../turbo.json:/app/turbo.json
-      - ../../../tsconfig.json:/app/tsconfig.json
-      # Preserve node_modules for performance
-      - /app/node_modules
+      - "3000:3000"     # Main app
+      - "3001:3001"     # Client dev server
+      - "5173:5173"     # Vite
+      - "9229:9229"     # Node debugger
     environment:
+      # Development defaults (can be overridden)
       - NODE_ENV=development
-      - ELIZA_DEV_MODE=true
+      - LOG_LEVEL=debug
+      - ELIZA_UI_ENABLE=true
+      
+      # AI Provider Keys (from .env.local or environment)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - DISCORD_API_TOKEN=${DISCORD_API_TOKEN}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TWITTER_USERNAME=${TWITTER_USERNAME}
-      - TWITTER_PASSWORD=${TWITTER_PASSWORD}
-      - TWITTER_EMAIL=${TWITTER_EMAIL}
+      
+      # Optional overrides
+      - POSTGRES_URL=${POSTGRES_URL:-}
+      - ELIZA_SERVER_AUTH_TOKEN=${ELIZA_SERVER_AUTH_TOKEN:-}
+      
+      # Development specific
+      - DEV_MODE=true
+      - WATCH_MODE=true
+      - DEBUG=eliza:*
+      
+    volumes:
+      # Mount source code for hot reload
+      - ..:/app:delegated
+      
+      # Mount .env.local if it exists
+      - ./.env.local:/home/eliza/agent/.env.local:ro
+      
+      # Persist agent data
+      - eliza_dev_data:/home/eliza/agent/data
+      
+      # Persist node_modules for faster rebuilds
+      - eliza_node_modules:/app/node_modules
+      - eliza_bun_cache:/home/eliza/.bun/install/cache
+      
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - eliza-dev
+    
+    # Development-friendly settings
+    stdin_open: true
+    tty: true
+    
+    # Override command for debugging if needed
+    # command: ["bun", "run", "dev:debug"]
 
-networks:
-  eliza-dev:
-    driver: bridge 
+volumes:
+  eliza_dev_data:
+  eliza_node_modules:
+  eliza_bun_cache:

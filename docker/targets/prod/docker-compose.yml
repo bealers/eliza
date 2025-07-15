@@ -1,0 +1,48 @@
+services:
+  eliza:
+    build:
+      context: ../../..
+      dockerfile: docker/targets/prod/Dockerfile
+    image: elizaos:production
+    container_name: elizaos-agent
+    ports:
+      - "3000:3000"
+    environment:
+      # Server Configuration
+      - NODE_ENV=production
+      - SERVER_PORT=3000
+      
+      # Enable Web UI
+      - ELIZA_UI_ENABLE=true
+      
+      # AI Provider Keys (set these in your .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      
+      # Optional: Database (defaults to SQLite if not set)
+      - POSTGRES_URL=${POSTGRES_URL:-}
+      
+      # Optional: Server Auth Token
+      - ELIZA_SERVER_AUTH_TOKEN=${ELIZA_SERVER_AUTH_TOKEN:-}
+      
+    volumes:
+      # Mount .env.local for overrides
+      - ../../.env.local:/home/eliza/agent/.env.local:ro
+      
+      # Mount character file
+      - ../../eliza.character.json:/home/eliza/agent/eliza.character.json:ro
+      
+      # Optional: Persist agent data
+      - eliza_data:/home/eliza/agent/data
+      
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/server/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  eliza_data:

@@ -72,7 +72,7 @@ export class DockerUtilities {
    * Build the elizaOS Docker image for a specific target
    */
   async buildImage(target: 'dev' | 'test' | 'prod' | 'demo' = 'prod'): Promise<void> {
-    const buildScript = path.join(this.projectRoot, 'docker', 'scripts', 'build.sh');
+    const buildScript = path.join(this.projectRoot, 'docker', 'scripts', 'build.ts');
     
     if (!fs.existsSync(buildScript)) {
       throw new Error('Build script not found. Please ensure the Docker infrastructure is properly set up.');
@@ -81,7 +81,7 @@ export class DockerUtilities {
     logger.info(`🐳 Building elizaOS Docker image for target: ${target}`);
     
     try {
-      const { stdout, stderr } = await execAsync(`bash "${buildScript}" ${target}`, {
+      const { stdout, stderr } = await execAsync(`bun run "${buildScript}" ${target}`, {
         cwd: this.projectRoot
       });
       
