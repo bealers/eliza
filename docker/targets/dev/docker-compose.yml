@@ -8,51 +8,66 @@ services:
     ports:
       - "3000:3000"     # Main app
       - "3001:3001"     # Client dev server
-      - "5173:5173"     # Vite
+      - "5173:5173"     # Vite dev server
       - "9229:9229"     # Node debugger
+    
+    volumes:
+      # Mount source code for hot reload (read-write)
+      - ../../..:/app
+      
+      # Persist node_modules for faster installs
+      - eliza_dev_node_modules:/app/node_modules
+      
+      # Persist bun cache
+      - eliza_bun_cache:/root/.bun/install/cache
+      
+      # Persist agent data
+      - eliza_dev_data:/home/eliza/agent/data
+    
     environment:
-      # Development defaults (can be overridden)
+      # Development defaults
       - NODE_ENV=development
       - LOG_LEVEL=debug
-      - ELIZA_UI_ENABLE=true
-      
-      # AI Provider Keys (from .env.local or environment)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      
-      # Optional overrides
-      - POSTGRES_URL=${POSTGRES_URL:-}
-      - ELIZA_SERVER_AUTH_TOKEN=${ELIZA_SERVER_AUTH_TOKEN:-}
-      
-      # Development specific
       - DEV_MODE=true
       - WATCH_MODE=true
       - DEBUG=eliza:*
       
-    volumes:
-      # Mount source code for hot reload
-      - ..:/app:delegated
-      
-      # Mount .env.local if it exists
-      - ./.env.local:/home/eliza/agent/.env.local:ro
-      
-      # Persist agent data
-      - eliza_dev_data:/home/eliza/agent/data
-      
-      # Persist node_modules for faster rebuilds
-      - eliza_node_modules:/app/node_modules
-      - eliza_bun_cache:/home/eliza/.bun/install/cache
-      
-    restart: unless-stopped
+      # Follow .env.local pattern - variables loaded from file
+      # No need to pass individual keys here
     
-    # Development-friendly settings
+    # Smart startup that handles template → target-specific → .env.local override pattern
+    command: >
+      sh -c "
+        echo '🔧 Setting up development environment...' &&
+        cd /home/eliza/agent &&
+        
+        # Copy generic template and modify for development target
+        cp .env.example .env &&
+        sed -i 's/LOG_LEVEL=info/LOG_LEVEL=debug/' .env &&
+        sed -i 's/NODE_ENV=production/NODE_ENV=development/' .env &&
+        sed -i 's/DEV_MODE=false/DEV_MODE=true/' .env &&
+        sed -i 's/WATCH_MODE=false/WATCH_MODE=true/' .env &&
+        echo 'DEBUG=eliza:*' >> .env &&
+        
+        # Apply .env.local overrides if it exists in project root
+        if [ -f /app/.env.local ]; then
+          echo '📝 Applying .env.local overrides from project root...' &&
+          cat /app/.env.local >> .env &&
+          echo '' >> .env
+        fi &&
+        
+        echo '📦 Installing dependencies...' &&
+        cd /app &&
+        bun install --frozen-lockfile &&
+        echo '🚀 Starting ElizaOS development server...' &&
+        exec bun run dev
+      "
+    
+    restart: unless-stopped
     stdin_open: true
     tty: true
-    
-    # Override command for debugging if needed
-    # command: ["bun", "run", "dev:debug"]
 
 volumes:
-  eliza_dev_data:
-  eliza_node_modules:
+  eliza_dev_node_modules:
   eliza_bun_cache:
+  eliza_dev_data:

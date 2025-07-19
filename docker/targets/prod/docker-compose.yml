@@ -1,10 +1,33 @@
 services:
+  elizaos-postgres:
+    image: pgvector/pgvector:pg15
+    container_name: elizaos-postgres
+    environment:
+      POSTGRES_DB: elizaos
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_PORT: 5432
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d elizaos"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   eliza:
     build:
       context: ../../..
       dockerfile: docker/targets/prod/Dockerfile
     image: elizaos:production
     container_name: elizaos-agent
+    depends_on:
+      elizaos-postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
@@ -15,12 +38,12 @@ services:
       # Enable Web UI
       - ELIZA_UI_ENABLE=true
       
+      # Database Configuration
+      - POSTGRES_URL=postgresql://admin:admin@elizaos-postgres:5432/elizaos
+      
       # AI Provider Keys (set these in your .env file)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      
-      # Optional: Database (defaults to SQLite if not set)
-      - POSTGRES_URL=${POSTGRES_URL:-}
       
       # Optional: Server Auth Token
       - ELIZA_SERVER_AUTH_TOKEN=${ELIZA_SERVER_AUTH_TOKEN:-}
@@ -46,3 +69,4 @@ services:
 
 volumes:
   eliza_data:
+  postgres_data:

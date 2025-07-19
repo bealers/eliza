@@ -12,6 +12,7 @@ export interface ContainerOptions {
   characterFiles?: string[];
   target: 'dev' | 'test' | 'prod' | 'demo';
   envVars?: Record<string, string>;
+  build?: boolean;
 }
 
 export interface DockerImage {
@@ -135,7 +136,8 @@ export class DockerUtilities {
     try {
       // Use docker-compose up with proper project name
       const projectName = `elizaos-${options.target}`;
-      const command = `docker-compose -f "${composeFile}" -p "${projectName}" up --build`;
+      const buildFlag = options.build ? ' --build' : '';
+      const command = `docker-compose -f "${composeFile}" -p "${projectName}" up${buildFlag}`;
       
       logger.info(`Running: ${command}`);
       logger.info(`🌐 ElizaOS will be available at: http://localhost:${options.port}`);
@@ -271,12 +273,9 @@ export class DockerUtilities {
     const standardEnvVars = [
       'OPENAI_API_KEY',
       'ANTHROPIC_API_KEY',
-      'DISCORD_API_TOKEN',
-      'TELEGRAM_BOT_TOKEN',
-      'TWITTER_USERNAME',
-      'TWITTER_PASSWORD', 
-      'TWITTER_EMAIL',
       'NODE_ENV',
+      'ELIZA_UI_ENABLE',
+      'ELIZA_SERVER_AUTH_TOKEN',
     ];
     
     // Add standard env vars if they exist
@@ -297,7 +296,7 @@ export class DockerUtilities {
   }
 
   /**
-   * Create environment file for docker-compose
+   * Create environment file by merging .env.example with .env.local overrides
    */
   private async createEnvFile(options: ContainerOptions): Promise<void> {
     const envFile = path.join(
@@ -308,22 +307,95 @@ export class DockerUtilities {
       '.env'
     );
 
-    const envContent = [
-      `# Generated environment file for ${options.target} target`,
-      `NODE_ENV=${options.target === 'dev' ? 'development' : 'production'}`,
-      `ELIZA_PORT=${options.port}`,
-      '',
-      '# API Keys (set these in your shell environment)',
-      `OPENAI_API_KEY=${process.env.OPENAI_API_KEY || ''}`,
-      `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY || ''}`,
-      `DISCORD_API_TOKEN=${process.env.DISCORD_API_TOKEN || ''}`,
-      `TELEGRAM_BOT_TOKEN=${process.env.TELEGRAM_BOT_TOKEN || ''}`,
-      `TWITTER_USERNAME=${process.env.TWITTER_USERNAME || ''}`,
-      `TWITTER_PASSWORD=${process.env.TWITTER_PASSWORD || ''}`,
-      `TWITTER_EMAIL=${process.env.TWITTER_EMAIL || ''}`,
-    ].join('\n');
+    // Path to base .env.example from project starter template
+    const baseEnvExample = path.join(
+      this.projectRoot,
+      'packages/app/node_modules/@elizaos/cli/templates/project-starter/.env.example'
+    );
+
+    // Path to local overrides
+    const envLocalFile = path.join(this.projectRoot, 'docker', '.env.local');
+
+    let envContent = '';
+
+    // Start with base .env.example if it exists
+    if (fs.existsSync(baseEnvExample)) {
+      envContent = await fs.promises.readFile(baseEnvExample, 'utf8');
+    } else {
+      // Fallback basic template if no .env.example found
+      envContent = [
+        '### elizaOS Environment Variables ###',
+        '# Basic configuration for Docker container',
+        '',
+        '### MODEL PROVIDER KEYS ###',
+        'OPENAI_API_KEY=',
+        'ANTHROPIC_API_KEY=',
+        '',
+        '### DATABASE ###',
+        '# POSTGRES_URL=postgresql://user:password@localhost:5432/elizaos',
+        '',
+        '### PLATFORM INTEGRATION ###',
+        'DISCORD_API_TOKEN=',
+        'TELEGRAM_BOT_TOKEN=',
+        'TWITTER_USERNAME=',
+        'TWITTER_PASSWORD=',
+        'TWITTER_EMAIL=',
+        '',
+        '### SERVER CONFIG ###',
+        'NODE_ENV=production',
+        'LOG_LEVEL=info',
+      ].join('\n');
+    }
+
+    // Apply .env.local overrides if file exists
+    if (fs.existsSync(envLocalFile)) {
+      const localOverrides = await fs.promises.readFile(envLocalFile, 'utf8');
+      const localVars = this.parseEnvFile(localOverrides);
+      
+      // Apply each override to the base content
+      for (const [key, value] of Object.entries(localVars)) {
+        const regex = new RegExp(`^${key}=.*$`, 'm');
+        if (envContent.match(regex)) {
+          // Replace existing line
+          envContent = envContent.replace(regex, `${key}=${value}`);
+        } else {
+          // Add new line at end
+          envContent += `\n${key}=${value}`;
+        }
+      }
+    }
+
+    // Apply target-specific overrides
+    envContent = envContent.replace(/^NODE_ENV=.*$/m, `NODE_ENV=${options.target === 'dev' ? 'development' : 'production'}`);
+    
+    // Add port if not already set
+    if (!envContent.match(/^ELIZA_PORT=/m)) {
+      envContent += `\nELIZA_PORT=${options.port}`;
+    }
 
     await fs.promises.writeFile(envFile, envContent, 'utf8');
+  }
+
+  /**
+   * Parse .env file content into key-value pairs
+   */
+  private parseEnvFile(content: string): Record<string, string> {
+    const vars: Record<string, string> = {};
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const equalIndex = trimmed.indexOf('=');
+        if (equalIndex > 0) {
+          const key = trimmed.substring(0, equalIndex);
+          const value = trimmed.substring(equalIndex + 1);
+          vars[key] = value;
+        }
+      }
+    }
+    
+    return vars;
   }
 
   /**

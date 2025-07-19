@@ -1,9 +1,10 @@
 import { logger } from '@elizaos/core';
 import { DockerUtilities, type ContainerOptions } from '../../../utils/docker-utils';
 import { type StartOptions } from '../types';
+import { loadCharacters } from '../utils/loader';
 
 /**
- * Start elizaOS using Docker containers
+ * Start elizaOS using Docker containers with smart character fallback logic
  */
 export async function startWithDocker(
   options: StartOptions & { character?: string[] }
@@ -14,6 +15,11 @@ export async function startWithDocker(
     // Check Docker availability first
     logger.info('🔍 Checking Docker availability...');
     await dockerUtils.checkDockerAvailable();
+
+    // Load characters using the same fallback logic as local CLI
+    logger.info('Loading characters with fallback logic...');
+    const charactersArg = options.character?.join(',') || '';
+    const characters = await loadCharacters(charactersArg);
 
     // Determine target based on environment or default to prod
     const target = process.env.NODE_ENV === 'development' ? 'dev' : 'prod';
@@ -30,11 +36,14 @@ export async function startWithDocker(
       },
     };
 
-    logger.info(`🐳 Starting elizaOS in Docker (${target} mode)...`);
-    logger.info(`📁 Project root: ${process.cwd()}`);
+    logger.info(`Starting elizaOS in Docker (${target} mode)...`);
+    logger.info(`Project root: ${process.cwd()}`);
     
-    if (containerOptions.characterFiles?.length) {
-      logger.info(`🎭 Character files: ${containerOptions.characterFiles.join(', ')}`);
+    // Log character information
+    if (options.character?.length) {
+      logger.info(`Character files: ${options.character.join(', ')}`);
+    } else {
+      logger.info(`Using default Eliza character (${characters.length} character(s) loaded)`);
     }
 
     // Start using docker-compose for better integration

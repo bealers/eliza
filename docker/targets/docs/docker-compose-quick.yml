@@ -1,0 +1,13 @@
+services:
+  docs:
+    build:
+      context: ../../..
+      dockerfile: docker/targets/docs/Dockerfile
+      no_cache: false
+      cache_from:
+        - elizaos:docs
+    image: elizaos:docs
+    container_name: elizaos-docs
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

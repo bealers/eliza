@@ -1,0 +1,19 @@
+services:
+  docs:
+    build:
+      context: ../../..
+      dockerfile: docker/targets/docs/Dockerfile
+      args:
+        BUN_VERSION: "1.2.13"
+      target: runtime
+    image: elizaos:docs-small
+    container_name: elizaos-docs
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 20M
